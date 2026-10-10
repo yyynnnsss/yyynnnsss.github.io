@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>酷我音乐解析播放器</title>
+<title>KW音乐解析播放器</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui, sans-serif;}
 body{
@@ -140,7 +140,7 @@ audio{
 <body>
 <div class="container">
   <div class="search-wrap">
-    <input id="inputBox" placeholder="酷我音乐ID/分享链接">
+    <input id="inputBox" placeholder="KW音乐ID/分享链接">
     <button id="parseBtn">解析播放</button>
   </div>
 
@@ -153,7 +153,7 @@ audio{
     <div id="historyContent" class="history-empty">暂无记录</div>
   </div>
 
-  <div id="loadingBox" class="loading" style="display:none;">正在解析酷我音乐...</div>
+  <div id="loadingBox" class="loading" style="display:none;">正在努力中...</div>
   <div id="errorBox" class="error" style="display:none;"></div>
 
   <div id="infoCard" class="info-card">
@@ -212,7 +212,7 @@ function renderHistory(){
   }
   let html = "";
   list.forEach(id=>{
-    html += `<div class="history-item" data-id="${id}">酷我音乐ID：${id}</div>`
+    html += `<div class="history-item" data-id="${id}">KW音乐ID：${id}</div>`
   })
   historyContent.innerHTML = html;
   // 点击历史项目回填并加载
@@ -230,9 +230,9 @@ clearHistoryBtn.onclick = ()=>{
   renderHistory();
 }
 
-// 提取酷我ID正则
+// 提取KWID正则
 function getKuwoId(str){
-  // 匹配酷我分享链接，例如 https://m.kuwo.cn/play_detail/123456
+  // 匹配KW分享链接，例如 https://m.kuwo.cn/play_detail/123456
   const regLink = /yinyue\/(\d+)/;
   const matchLink = str.match(regLink);
   if(matchLink) return matchLink[1];
@@ -252,7 +252,7 @@ async function loadMusic(){
   const songId = getKuwoId(raw);
   if(!songId){
     loadingBox.style.display = "none";
-    errorBox.textContent = "❌ 识别失败，请输入酷我歌曲ID或酷我分享链接";
+    errorBox.textContent = "❌ 识别失败，请输入KW歌曲ID或KW分享链接";
     errorBox.style.display = "block";
     return;
   }
