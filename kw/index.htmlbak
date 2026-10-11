@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>KW音乐解析播放器</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui, sans-serif;}
+body{
+  background: #121212;
+  color:#fff;
+  min-height:100vh;
+  padding:20px 16px;
+}
+.container{
+  max-width:600px;
+  margin:0 auto;
+}
+.search-wrap{
+  display:flex;
+  gap:10px;
+  margin-bottom:24px;
+}
+#inputBox{
+  flex:1;
+  padding:14px 16px;
+  border-radius:30px;
+  border:none;
+  background:#222;
+  color:#fff;
+  font-size:16px;
+  outline:none;
+}
+#parseBtn{
+  padding:0 20px;
+  border:none;
+  border-radius:30px;
+  background:#2593fc;
+  color:#fff;
+  font-size:16px;
+  cursor:pointer;
+  white-space:nowrap;
+}
+#parseBtn:active{opacity:0.8}
+
+/* 历史记录区域 */
+.history-title{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:10px;
+}
+.history-title h3{
+  font-size:16px;
+  color:#ddd;
+}
+#clearHistory{
+  color:#ff6b6b;
+  font-size:14px;
+  cursor:pointer;
+}
+.history-list{
+  background:#1e1e1e;
+  border-radius:12px;
+  padding:12px;
+  margin-bottom:24px;
+}
+.history-item{
+  padding:8px 4px;
+  border-bottom:1px solid #333;
+  cursor:pointer;
+  color:#ccc;
+}
+.history-item:last-child{border-bottom:none;}
+.history-item:hover{color:#fff}
+.history-empty{
+  color:#777;
+  text-align:center;
+  padding:10px;
+}
+
+.info-card{
+  background:#1e1e1e;
+  border-radius:16px;
+  padding:20px;
+  display:none;
+}
+.audio-url-text{
+  font-size:12px;
+  color:#999;
+  word-break:break-all;
+  background:#2a2a2a;
+  padding:8px;
+  border-radius:8px;
+  margin-bottom:14px;
+}
+audio{
+  width:100%;
+  margin-top:10px;
+}
+.btn-row{
+  display:flex;
+  gap:10px;
+  margin-top:14px;
+}
+.dl-btn,.copy-url-btn{
+  flex:1;
+  padding:12px;
+  border:none;
+  border-radius:10px;
+  color:#fff;
+  font-size:16px;
+  cursor:pointer;
+}
+.dl-btn{
+  background:#27ae60;
+}
+.copy-url-btn{
+  background:#9b59b6;
+}
+.dl-btn:active,.copy-url-btn:active{opacity:0.8}
+.tip{
+  text-align:center;
+  color:#999;
+  margin-top:12px;
+}
+.loading{
+  text-align:center;
+  padding:30px;
+  font-size:16px;
+  color:#ccc;
+}
+.error{
+  color:#ff5555;
+  text-align:center;
+  padding:20px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="search-wrap">
+    <input id="inputBox" placeholder="KW音乐ID/分享链接">
+    <button id="parseBtn">解析播放</button>
+  </div>
+
+  <!-- 历史记录 -->
+  <div class="history-title">
+    <h3>📜解析历史</h3>
+    <span id="clearHistory">清空历史</span>
+  </div>
+  <div class="history-list" id="historyWrap">
+    <div id="historyContent" class="history-empty">暂无记录</div>
+  </div>
+
+  <div id="loadingBox" class="loading" style="display:none;">正在努力中...</div>
+  <div id="errorBox" class="error" style="display:none;"></div>
+
+  <div id="infoCard" class="info-card">
+    <div class="audio-url-text" id="audioUrlBox"></div>
+    <audio id="audioPlayer" controls>
+    <div class="btn-row">
+      <button id="downloadBtn" class="dl-btn">下载歌曲</button>
+      <button id="copyUrlBtn" class="copy-url-btn">复制歌曲链接</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const inputBox = document.getElementById('inputBox');
+const parseBtn = document.getElementById('parseBtn');
+const infoCard = document.getElementById('infoCard');
+const loadingBox = document.getElementById('loadingBox');
+const errorBox = document.getElementById('errorBox');
+const audioUrlBox = document.getElementById('audioUrlBox');
+const audioPlayer = document.getElementById('audioPlayer');
+const downloadBtn = document.getElementById('downloadBtn');
+const copyUrlBtn = document.getElementById('copyUrlBtn');
+const historyWrap = document.getElementById('historyWrap');
+const historyContent = document.getElementById('historyContent');
+const clearHistoryBtn = document.getElementById('clearHistory');
+
+// 全局变量，存放提取出来的歌曲url
+let songUrl = "";
+const HISTORY_KEY = "kuwo_music_history";
+const MAX_HISTORY = 10;
+
+// 读取本地存储历史记录
+function getHistory(){
+  const str = localStorage.getItem(HISTORY_KEY);
+  return str ? JSON.parse(str) : [];
+}
+// 保存历史
+function saveHistory(list){
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+}
+// 添加一条记录（只保存ID）
+function addHistory(itemId){
+  let list = getHistory();
+  list = list.filter(i=>i !== itemId);
+  list.unshift(itemId);
+  if(list.length>MAX_HISTORY) list.pop();
+  saveHistory(list);
+  renderHistory();
+}
+// 渲染历史列表
+function renderHistory(){
+  const list = getHistory();
+  if(list.length ===0){
+    historyContent.innerHTML = `<div class="history-empty">暂无记录</div>`;
+    return;
+  }
+  let html = "";
+  list.forEach(id=>{
+    html += `<div class="history-item" data-id="${id}">KW音乐ID：${id}</div>`
+  })
+  historyContent.innerHTML = html;
+  // 点击历史项目回填并加载
+  document.querySelectorAll(".history-item").forEach(el=>{
+    el.onclick = ()=>{
+      const id = el.dataset.id;
+      inputBox.value = id;
+      loadMusic();
+    }
+  })
+}
+//清空历史
+clearHistoryBtn.onclick = ()=>{
+  localStorage.removeItem(HISTORY_KEY);
+  renderHistory();
+}
+
+// 提取KWID正则
+function getKuwoId(str){
+  // 匹配KW分享链接，例如 https://m.kuwo.cn/play_detail/123456
+  const regLink = /yinyue\/(\d+)/;
+  const matchLink = str.match(regLink);
+  if(matchLink) return matchLink[1];
+  // 直接输入纯数字ID
+  if(/^\d+$/.test(str.trim())){
+    return str.trim();
+  }
+  return null;
+}
+
+async function loadMusic(){
+  const raw = inputBox.value.trim();
+  infoCard.style.display = "none";
+  errorBox.style.display = "none";
+  loadingBox.style.display = "block";
+
+  const songId = getKuwoId(raw);
+  if(!songId){
+    loadingBox.style.display = "none";
+    errorBox.textContent = "❌ 识别失败，请输入KW歌曲ID或KW分享链接";
+    errorBox.style.display = "block";
+    return;
+  }
+
+  try{
+    const apiUrl = `https://musicapi.haitangw.net/music/kw.php?type=json&id=${songId}&level=320k`;
+    const res = await fetch(apiUrl);
+    const jsonData = await res.json();
+    loadingBox.style.display = "none";
+
+    // 从 json.data.url 获取歌曲链接
+    if(!jsonData || !jsonData.data || !jsonData.data.url){
+      errorBox.textContent = "❌ 解析失败，未找到data内的url音乐链接";
+      errorBox.style.display = "block";
+      return;
+    }
+    songUrl = jsonData.data.url;
+
+    // 历史仅保存ID
+    addHistory(songId);
+
+    // 页面展示提取到的歌曲链接
+    audioUrlBox.innerText = `歌曲链接：${songUrl}`;
+    // 赋值给audio播放器播放
+    audioPlayer.src = songUrl;
+
+    infoCard.style.display = "block";
+    audioPlayer.play().catch(e=>console.log("浏览器策略拦截自动播放"));
+
+  }catch(err){
+    loadingBox.style.display = "none";
+    errorBox.textContent = "❌ 网络请求失败："+err.message;
+    errorBox.style.display = "block";
+  }
+}
+
+//下载功能
+downloadBtn.onclick = async ()=>{
+  if(!songUrl) return;
+  try{
+    const resp = await fetch(songUrl);
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = "music.mp3";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+  }catch(e){
+    alert("下载失败，可复制音频链接手动下载");
+  }
+}
+
+//复制歌曲链接
+copyUrlBtn.onclick = async ()=>{
+  if(!songUrl) return;
+  try{
+    await navigator.clipboard.writeText(songUrl);
+    alert("✅ 歌曲链接复制成功");
+  }catch(e){
+    alert("复制失败，请手动选中链接复制");
+  }
+}
+
+parseBtn.onclick = loadMusic;
+inputBox.addEventListener('keydown', e=>{
+  if(e.key === 'Enter') loadMusic();
+})
+
+//页面加载渲染历史
+renderHistory();
+</script>
+</body>
+</html>
