@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>KW音乐解析播放器</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui, sans-serif;}
+html,body{
+  height:100%;
+  overflow:hidden; /* 禁止整个页面滚动 */
+  background: #121212;
+  color:#fff;
+}
+.wrap{
+  height:100%;
+  display:flex;
+  flex-direction:column;
+}
+/* 顶部搜索栏：固定在最上方，永远可见，不会滚走 */
+.search-wrap{
+  flex:0 0 auto;
+  display:flex;
+  gap:10px;
+  padding:16px;
+}
+#inputBox{
+  flex:1;
+  padding:14px 16px;
+  border-radius:30px;
+  border:none;
+  background:#222;
+  color:#fff;
+  font-size:16px;
+  outline:none;
+}
+#parseBtn{
+  padding:0 20px;
+  border:none;
+  border-radius:30px;
+  background:#2593fc;
+  color:#fff;
+  font-size:16px;
+  cursor:pointer;
+  white-space:nowrap;
+}
+#parseBtn:active{opacity:0.8}
+
+/* 下方主体区域：单独滚动，只有这部分会滚动 */
+.scroll-body{
+  flex:1;
+  overflow-y:auto;
+  padding:0 16px 20px;
+}
+.container{
+  max-width:600px;
+  margin:0 auto;
+}
+/* 历史记录区域 */
+.history-title{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:10px;
+}
+.history-title h3{
+  font-size:16px;
+  color:#ddd;
+}
+#clearHistory{
+  color:#ff6b6b;
+  font-size:14px;
+  cursor:pointer;
+}
+.history-list{
+  background:#1e1e1e;
+  border-radius:12px;
+  padding:12px;
+  margin-bottom:24px;
+}
+.history-item{
+  padding:8px 4px;
+  border-bottom:1px solid #333;
+  cursor:pointer;
+  color:#ccc;
+}
+.history-item:last-child{border-bottom:none;}
+.history-item:hover{color:#fff}
+.history-empty{
+  color:#777;
+  text-align:center;
+  padding:10px;
+}
+.info-card{
+  background:#1e1e1e;
+  border-radius:16px;
+  padding:20px;
+  display:none;
+}
+.audio-url-text{
+  font-size:12px;
+  color:#999;
+  word-break:break-all;
+  background:#2a2a2a;
+  padding:8px;
+  border-radius:8px;
+  margin-bottom:14px;
+}
+.lyric-box{
+  max-height:220px;
+  overflow:hidden;
+  background:#222;
+  border-radius:12px;
+  padding:12px;
+  margin-bottom:14px;
+  position:relative;
+}
+.lyric-wrap{
+  transition: transform 0.3s ease;
+}
+.lyric-line{
+  text-align:center;
+  padding:8px 0;
+  color:#aaa;
+  font-size:15px;
+}
+.lyric-line.active{
+  color:#fff;
+  font-size:18px;
+  font-weight:bold;
+}
+audio{
+  width:100%;
+  margin-top:10px;
+}
+.btn-row{
+  display:flex;
+  gap:10px;
+  margin-top:14px;
+}
+.dl-btn,.copy-url-btn{
+  flex:1;
+  padding:12px;
+  border:none;
+  border-radius:10px;
+  color:#fff;
+  font-size:16px;
+  cursor:pointer;
+}
+.dl-btn{
+  background:#27ae60;
+}
+.copy-url-btn{
+  background:#9b59b6;
+}
+.dl-btn:active,.copy-url-btn:active{opacity:0.8}
+.tip{
+  text-align:center;
+  color:#999;
+  margin-top:12px;
+}
+.loading{
+  text-align:center;
+  padding:30px;
+  font-size:16px;
+  color:#ccc;
+}
+.error{
+  color:#ff5555;
+  text-align:center;
+  padding:20px;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- 顶部搜索：固定在页面最上方，永远可见！ -->
+  <div class="search-wrap">
+    <input id="inputBox" placeholder="输入KW音乐ID / KW分享链接">
+    <button id="parseBtn">解析播放</button>
+  </div>
+  <!-- 只有这一块内容可以滚动 -->
+  <div class="scroll-body">
+    <div class="container">
+      <div class="history-title">
+        <h3>📜 播放历史</h3>
+        <span id="clearHistory">清空历史</span>
+      </div>
+      <div class="history-list" id="historyWrap">
+        <div id="historyContent" class="history-empty">暂无记录</div>
+      </div>
+      <div id="loadingBox" class="loading" style="display:none;">正在解析KW音乐...</div>
+      <div id="errorBox" class="error" style="display:none;"></div>
+      <div id="infoCard" class="info-card">
+        <div class="audio-url-text" id="audioUrlBox"></div>
+        <div class="lyric-box">
+          <div class="lyric-wrap" id="lyricWrap"></div>
+        </div>
+        <audio id="audioPlayer" controls>
+        <div class="btn-row">
+          <button id="downloadBtn" class="dl-btn">下载歌曲</button>
+          <button id="copyUrlBtn" class="copy-url-btn">复制歌曲链接</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const inputBox = document.getElementById('inputBox');
+const parseBtn = document.getElementById('parseBtn');
+const infoCard = document.getElementById('infoCard');
+const loadingBox = document.getElementById('loadingBox');
+const errorBox = document.getElementById('errorBox');
+const audioUrlBox = document.getElementById('audioUrlBox');
+const audioPlayer = document.getElementById('audioPlayer');
+const downloadBtn = document.getElementById('downloadBtn');
+const copyUrlBtn = document.getElementById('copyUrlBtn');
+const historyWrap = document.getElementById('historyWrap');
+const historyContent = document.getElementById('historyContent');
+const clearHistoryBtn = document.getElementById('clearHistory');
+const lyricWrap = document.getElementById('lyricWrap');
+const scrollBody = document.querySelector('.scroll-body');
+
+let songUrl = "";
+let lyricList = [];
+const HISTORY_KEY = "kuwo_music_history";
+const MAX_HISTORY = 10;
+
+// 输入框点击不需要滚动修复了！因为搜索框固定在顶部永远可见
+inputBox.addEventListener('focus', ()=>{
+  // 把滚动容器滚回顶部（可选，点击输入框，下方内容回到最上面）
+  scrollBody.scrollTop = 0;
+});
+
+function getHistory(){
+  const str = localStorage.getItem(HISTORY_KEY);
+  return str ? JSON.parse(str) : [];
+}
+function saveHistory(list){
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+}
+function addHistory(itemId){
+  let list = getHistory();
+  list = list.filter(i=>i !== itemId);
+  list.unshift(itemId);
+  if(list.length>MAX_HISTORY) list.pop();
+  saveHistory(list);
+  renderHistory();
+}
+function renderHistory(){
+  const list = getHistory();
+  if(list.length ===0){
+    historyContent.innerHTML = `<div class="history-empty">暂无记录</div>`;
+    return;
+  }
+  let html = "";
+  list.forEach(id=>{
+    html += `<div class="history-item" data-id="${id}">KWID：${id}</div>`;
+  })
+  historyContent.innerHTML = html;
+  document.querySelectorAll(".history-item").forEach(el=>{
+    el.onclick = ()=>{
+      const id = el.dataset.id;
+      inputBox.value = id;
+      loadMusic();
+    }
+  })
+}
+clearHistoryBtn.onclick = ()=>{
+  localStorage.removeItem(HISTORY_KEY);
+  renderHistory();
+}
+function getKuwoId(str){
+  const regLink = /yinyue\/(\d+)/;
+  const matchLink = str.match(regLink);
+  if(matchLink) return matchLink[1];
+  if(/^\d+$/.test(str.trim())){
+    return str.trim();
+  }
+  return null;
+}
+function parseKuwoLyric(jsonData){
+  lyricList = [];
+  if(!jsonData || !jsonData.data || !Array.isArray(jsonData.data.lrclist)){
+    lyricWrap.innerHTML = `<div class="lyric-line">暂无歌词</div>`;
+    return;
+  }
+  jsonData.data.lrclist.forEach(item=>{
+    const time = parseFloat(item.time);
+    const text = item.lineLyric.trim();
+    if(text){
+      lyricList.push({time, text});
+    }
+  })
+  lyricList.sort((a,b)=>a.time - b.time);
+  renderLyricHtml();
+}
+function renderLyricHtml(){
+  let html = "";
+  lyricList.forEach(item=>{
+    html += `<div class="lyric-line">${item.text}</div>`
+  })
+  lyricWrap.innerHTML = html;
+}
+function updateLyric(){
+  const currentTime = audioPlayer.currentTime;
+  let activeIndex = 0;
+  for(let i=0;i<lyricList.length;i++){
+    if(currentTime >= lyricList[i].time){
+      activeIndex = i;
+    }else{
+      break;
+    }
+  }
+  const lines = lyricWrap.querySelectorAll('.lyric-line');
+  lines.forEach((line,idx)=>{
+    line.classList.remove('active');
+    if(idx === activeIndex){
+      line.classList.add('active');
+      line.scrollIntoView({block:"center", behavior:"smooth"});
+    }
+  })
+}
+async function getLyric(musicId){
+  try{
+    const lyricApi = `https://www.kuwo.cn/openapi/v1/www/lyric/getlyric?musicId=${musicId}`;
+    const resp = await fetch(lyricApi);
+    const lyricJson = await resp.json();
+    parseKuwoLyric(lyricJson);
+  }catch(e){
+    lyricWrap.innerHTML = `<div class="lyric-line">歌词获取失败(跨域)</div>`;
+    lyricList = [];
+  }
+}
+async function loadMusic(){
+  const raw = inputBox.value.trim();
+  infoCard.style.display = "none";
+  errorBox.style.display = "none";
+  loadingBox.style.display = "block";
+  lyricWrap.innerHTML = `<div class="lyric-line">加载歌词中...</div>`;
+  lyricList = [];
+  const songId = getKuwoId(raw);
+  if(!songId){
+    loadingBox.style.display = "none";
+    errorBox.textContent = "❌ 识别失败，请输入KW歌曲ID或KW分享链接";
+    errorBox.style.display = "block";
+    return;
+  }
+  try{
+    const apiUrl = `https://musicapi.haitangw.net/music/kw.php?type=json&id=${songId}&level=320k`;
+    const res = await fetch(apiUrl);
+    const jsonData = await res.json();
+    loadingBox.style.display = "none";
+    if(!jsonData || !jsonData.data || !jsonData.data.url){
+      errorBox.textContent = "❌ 解析失败，未找到data内的url音乐链接";
+      errorBox.style.display = "block";
+      return;
+    }
+    songUrl = jsonData.data.url;
+    getLyric(songId);
+    addHistory(songId);
+    audioUrlBox.innerText = `歌曲链接：${songUrl}`;
+    audioPlayer.src = songUrl;
+    infoCard.style.display = "block";
+    audioPlayer.play().catch(e=>console.log("浏览器策略拦截自动播放"));
+  }catch(err){
+    loadingBox.style.display = "none";
+    errorBox.textContent = "❌ 网络请求失败："+err.message;
+    errorBox.style.display = "block";
+  }
+}
+audioPlayer.ontimeupdate = function(){
+  if(lyricList.length>0){
+    updateLyric();
+  }
+}
+downloadBtn.onclick = async ()=>{
+  if(!songUrl) return;
+  try{
+    const resp = await fetch(songUrl);
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = "music.mp3";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+  }catch(e){
+    alert("下载失败，可复制音频链接手动下载");
+  }
+}
+copyUrlBtn.onclick = async ()=>{
+  if(!songUrl) return;
+  try{
+    await navigator.clipboard.writeText(songUrl);
+    alert("✅ 歌曲链接复制成功");
+  }catch(e){
+    alert("复制失败，请手动选中链接复制");
+  }
+}
+parseBtn.onclick = loadMusic;
+inputBox.addEventListener('keydown', e=>{
+  if(e.key === 'Enter') loadMusic();
+})
+renderHistory();
+</script>
+</body>
+</html>
