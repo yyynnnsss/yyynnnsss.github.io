@@ -298,7 +298,7 @@ document.querySelectorAll(".tab-item").forEach(tab=>{
 // ✅关键修复：等待DOM全部加载完成再执行初始化
 document.addEventListener("DOMContentLoaded", async function(){
   resetObserver();
-  listWrap.innerHTML = `<div class="loading">正在加载毒鸡汤...</div>`;
+  listWrap.innerHTML = `<div class="loading">鸡汤正在熬制中...</div>`;
   await loadMore();
 });
 </script>
