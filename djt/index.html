@@ -106,7 +106,7 @@ const apiConfig = {
     url:"https://jkapi.com/api/dujitang",
     name:"毒鸡汤",
     parse:"text",
-    pageSize:12
+    pageSize:15
   },
   gushi:{
     url:"xkw.html",
@@ -227,7 +227,7 @@ function showLoading(show){
     if(!el){
       el = document.createElement("div");
       el.className="loading";
-      el.innerText="加载中…";
+      el.innerText="正在熬制中…";
       sentinel.before(el);
     }
   }else{
